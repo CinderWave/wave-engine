@@ -1,7 +1,5 @@
-# Wave Engine
+Wave Engine is a handcrafted C++ game engine focused on precision, control and long term maintainability.
+Every system is built from the ground up, without prebuilt UI frameworks or shortcuts, allowing the engine to develop its own identity and workflow.
 
-Wave Engine is a modern C++ game engine with a custom editor and a focus on clean, understandable systems.
-
-The goal is to keep the codebase approachable, moddable and open to community contributions, without relying on heavy prebuilt UI layers or opaque engine stacks.
-
-This repository contains the publicly shared build of the engine.
+This repository is an internal build.
+All code, systems and tools contained here are private and reserved for in-studio development only.
