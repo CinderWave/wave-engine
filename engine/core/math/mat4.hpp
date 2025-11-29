@@ -2,183 +2,120 @@
 
 #include <cmath>
 
-#include "engine/core/math/vec3.hpp"
+namespace wave::engine::math {
 
-namespace wave::engine::core::math
-{
-    // Simple 4x4 matrix.
-    //
-    // Stored row-major as m[row][col].
-    // All helpers are written to be self consistent inside Wave Engine.
-    struct Mat4
-    {
-        float m[4][4]{};
+struct Vec3 {
+    float x{0.0f};
+    float y{0.0f};
+    float z{0.0f};
+};
 
-        // Identity matrix
-        static Mat4 identity() noexcept
-        {
-            Mat4 result{};
-            result.m[0][0] = 1.0f;
-            result.m[1][1] = 1.0f;
-            result.m[2][2] = 1.0f;
-            result.m[3][3] = 1.0f;
-            return result;
-        }
+struct Mat4 {
+    // Column-major 4x4 (matches GLSL / Vulkan conventions)
+    float m[16]{};
 
-        // Translation matrix
-        static Mat4 translation(const Vec3& t) noexcept
-        {
-            Mat4 result = identity();
-            result.m[3][0] = t.x;
-            result.m[3][1] = t.y;
-            result.m[3][2] = t.z;
-            return result;
-        }
+    static Mat4 identity() {
+        Mat4 r{};
+        r.m[0]  = 1.0f;
+        r.m[5]  = 1.0f;
+        r.m[10] = 1.0f;
+        r.m[15] = 1.0f;
+        return r;
+    }
 
-        // Uniform or non-uniform scale
-        static Mat4 scale(const Vec3& s) noexcept
-        {
-            Mat4 result{};
-            result.m[0][0] = s.x;
-            result.m[1][1] = s.y;
-            result.m[2][2] = s.z;
-            result.m[3][3] = 1.0f;
-            return result;
-        }
+    static Mat4 perspective(float fovYRadians, float aspect, float zNear, float zFar) {
+        // Right-handed, clip space with depth [0,1] (Vulkan style)
+        const float f = 1.0f / std::tan(fovYRadians * 0.5f);
 
-        // Rotation around X axis (radians)
-        static Mat4 rotation_x(float radians) noexcept
-        {
-            Mat4 result = identity();
-            float c = std::cos(radians);
-            float s = std::sin(radians);
+        Mat4 r{};
+        r.m[0]  = f / aspect;
+        r.m[5]  = f;
+        r.m[10] = zFar / (zFar - zNear);
+        r.m[11] = 1.0f;
+        r.m[14] = (-zNear * zFar) / (zFar - zNear);
+        // Others remain 0
+        return r;
+    }
 
-            result.m[1][1] = c;
-            result.m[1][2] = s;
-            result.m[2][1] = -s;
-            result.m[2][2] = c;
-            return result;
-        }
+    static Mat4 multiply(const Mat4& a, const Mat4& b) {
+        Mat4 r{};
 
-        // Rotation around Y axis (radians)
-        static Mat4 rotation_y(float radians) noexcept
-        {
-            Mat4 result = identity();
-            float c = std::cos(radians);
-            float s = std::sin(radians);
-
-            result.m[0][0] = c;
-            result.m[0][2] = -s;
-            result.m[2][0] = s;
-            result.m[2][2] = c;
-            return result;
-        }
-
-        // Rotation around Z axis (radians)
-        static Mat4 rotation_z(float radians) noexcept
-        {
-            Mat4 result = identity();
-            float c = std::cos(radians);
-            float s = std::sin(radians);
-
-            result.m[0][0] = c;
-            result.m[0][1] = s;
-            result.m[1][0] = -s;
-            result.m[1][1] = c;
-            return result;
-        }
-
-        // Matrix multiplication
-        Mat4 operator*(const Mat4& rhs) const noexcept
-        {
-            Mat4 result{};
-
-            for (int row = 0; row < 4; ++row)
-            {
-                for (int col = 0; col < 4; ++col)
-                {
-                    result.m[row][col] =
-                        m[row][0] * rhs.m[0][col] +
-                        m[row][1] * rhs.m[1][col] +
-                        m[row][2] * rhs.m[2][col] +
-                        m[row][3] * rhs.m[3][col];
-                }
+        // Column-major multiplication: r = a * b
+        for (int c = 0; c < 4; ++c) {
+            for (int rIdx = 0; rIdx < 4; ++rIdx) {
+                r.m[c * 4 + rIdx] =
+                    a.m[0 * 4 + rIdx] * b.m[c * 4 + 0] +
+                    a.m[1 * 4 + rIdx] * b.m[c * 4 + 1] +
+                    a.m[2 * 4 + rIdx] * b.m[c * 4 + 2] +
+                    a.m[3 * 4 + rIdx] * b.m[c * 4 + 3];
             }
-
-            return result;
         }
 
-        Mat4& operator*=(const Mat4& rhs) noexcept
-        {
-            *this = (*this) * rhs;
-            return *this;
-        }
+        return r;
+    }
 
-        // Transform a Vec3 as a position (w = 1)
-        Vec3 transform_point(const Vec3& v) const noexcept
-        {
-            float x = v.x * m[0][0] + v.y * m[1][0] + v.z * m[2][0] + m[3][0];
-            float y = v.x * m[0][1] + v.y * m[1][1] + v.z * m[2][1] + m[3][1];
-            float z = v.x * m[0][2] + v.y * m[1][2] + v.z * m[2][2] + m[3][2];
-            float w = v.x * m[0][3] + v.y * m[1][3] + v.z * m[2][3] + m[3][3];
+    static Mat4 look_at(const Vec3& eye, const Vec3& target, const Vec3& up) {
+        // Standard right-handed look-at.
+        Vec3 f{
+            target.x - eye.x,
+            target.y - eye.y,
+            target.z - eye.z
+        };
 
-            if (w != 0.0f)
-            {
-                float inv_w = 1.0f / w;
-                return {x * inv_w, y * inv_w, z * inv_w};
+        // Normalize f
+        {
+            float len = std::sqrt(f.x * f.x + f.y * f.y + f.z * f.z);
+            if (len > 0.0f) {
+                f.x /= len;
+                f.y /= len;
+                f.z /= len;
             }
-
-            return {x, y, z};
         }
 
-        // Transform a Vec3 as a direction (ignores translation, w = 0)
-        Vec3 transform_direction(const Vec3& v) const noexcept
+        // s = normalize(cross(f, up))
+        Vec3 s{
+            f.y * up.z - f.z * up.y,
+            f.z * up.x - f.x * up.z,
+            f.x * up.y - f.y * up.x
+        };
         {
-            float x = v.x * m[0][0] + v.y * m[1][0] + v.z * m[2][0];
-            float y = v.x * m[0][1] + v.y * m[1][1] + v.z * m[2][1];
-            float z = v.x * m[0][2] + v.y * m[1][2] + v.z * m[2][2];
-            return {x, y, z};
+            float len = std::sqrt(s.x * s.x + s.y * s.y + s.z * s.z);
+            if (len > 0.0f) {
+                s.x /= len;
+                s.y /= len;
+                s.z /= len;
+            }
         }
 
-        // Perspective projection matrix (right handed, depth in [0, 1] or [-1, 1]
-        // depending how you later configure your Vulkan / graphics backend).
-        static Mat4 perspective(float fov_radians,
-                                float aspect,
-                                float z_near,
-                                float z_far) noexcept
-        {
-            float f = 1.0f / std::tan(fov_radians * 0.5f);
-            Mat4 result{};
+        // u = cross(s, f)
+        Vec3 u{
+            s.y * f.z - s.z * f.y,
+            s.z * f.x - s.x * f.z,
+            s.x * f.y - s.y * f.x
+        };
 
-            result.m[0][0] = f / aspect;
-            result.m[1][1] = f;
-            result.m[2][2] = z_far / (z_far - z_near);
-            result.m[2][3] = 1.0f;
-            result.m[3][2] = (-z_near * z_far) / (z_far - z_near);
+        Mat4 r = Mat4::identity();
 
-            return result;
-        }
+        // Rotation (columns)
+        r.m[0] =  s.x;
+        r.m[4] =  s.y;
+        r.m[8] =  s.z;
 
-        // Orthographic projection matrix
-        static Mat4 orthographic(float left,
-                                 float right,
-                                 float bottom,
-                                 float top,
-                                 float z_near,
-                                 float z_far) noexcept
-        {
-            Mat4 result = identity();
+        r.m[1] =  u.x;
+        r.m[5] =  u.y;
+        r.m[9] =  u.z;
 
-            result.m[0][0] = 2.0f / (right - left);
-            result.m[1][1] = 2.0f / (top - bottom);
-            result.m[2][2] = 1.0f / (z_far - z_near);
+        r.m[2]  = -f.x;
+        r.m[6]  = -f.y;
+        r.m[10] = -f.z;
 
-            result.m[3][0] = -(right + left) / (right - left);
-            result.m[3][1] = -(top + bottom) / (top - bottom);
-            result.m[3][2] = -z_near / (z_far - z_near);
+        // Translation
+        r.m[12] = -(s.x * eye.x + s.y * eye.y + s.z * eye.z);
+        r.m[13] = -(u.x * eye.x + u.y * eye.y + u.z * eye.z);
+        r.m[14] =  (f.x * eye.x + f.y * eye.y + f.z * eye.z);
 
-            return result;
-        }
-    };
+        return r;
+    }
+};
 
-} // namespace wave::engine::core::math
+} // namespace wave::engine::math

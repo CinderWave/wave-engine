@@ -4,45 +4,40 @@
 
 namespace wave::engine::core::time
 {
-    double Time::s_start_time       = 0.0;
-    double Time::s_last_frame_time  = 0.0;
-    double Time::s_delta            = 0.0;
+    double        Time::s_lastTimestamp = 0.0;
+    float         Time::s_deltaSeconds  = 0.0f;
+    float         Time::s_totalSeconds  = 0.0f;
+    std::uint64_t Time::s_frameCount    = 0;
 
-    static double now_seconds() noexcept
+    static double now_seconds()
     {
-        using clock = std::chrono::high_resolution_clock;
-        auto tp = clock::now().time_since_epoch();
-        return std::chrono::duration<double>(tp).count();
+        using namespace std::chrono;
+        auto now = high_resolution_clock::now();
+        auto sec = time_point_cast<duration<double>>(now);
+        return sec.time_since_epoch().count();
     }
 
     void Time::initialize() noexcept
     {
-        s_start_time      = now_seconds();
-        s_last_frame_time = s_start_time;
-        s_delta           = 0.0;
+        s_lastTimestamp = now_seconds();
+        s_deltaSeconds  = 0.0f;
+        s_totalSeconds  = 0.0f;
+        s_frameCount    = 0;
     }
 
     void Time::update() noexcept
     {
         double current = now_seconds();
-        s_delta        = current - s_last_frame_time;
-        s_last_frame_time = current;
-    }
+        double dt      = current - s_lastTimestamp;
 
-    double Time::time_since_start() noexcept
-    {
-        return now_seconds() - s_start_time;
-    }
+        // Clamp very large delta jumps, helps during window moves or halts.
+        if (dt > 0.25)
+            dt = 0.25;
 
-    double Time::delta_seconds() noexcept
-    {
-        return s_delta;
-    }
-
-    std::uint64_t Time::milliseconds_since_start() noexcept
-    {
-        double ms = (now_seconds() - s_start_time) * 1000.0;
-        return static_cast<std::uint64_t>(ms);
+        s_deltaSeconds = static_cast<float>(dt);
+        s_totalSeconds += s_deltaSeconds;
+        s_lastTimestamp = current;
+        ++s_frameCount;
     }
 
 } // namespace wave::engine::core::time

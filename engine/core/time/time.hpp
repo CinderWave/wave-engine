@@ -4,32 +4,35 @@
 
 namespace wave::engine::core::time
 {
-    // Simple high-res timing module.
-    // Provides:
-    //   - Real time (seconds since engine start)
-    //   - Delta time
-    //   - Millisecond timestamp
-    //   - Reset capability (useful for profiling)
-
+    // Time module
+    //
+    // Usage:
+    //  - Call Time::initialize() ONCE during engine startup.
+    //  - Call Time::update() once per frame.
+    //  - Query delta_seconds() and total_seconds() anywhere.
+    //
     class Time
     {
     public:
+        Time() = delete;
+
         static void initialize() noexcept;
         static void update() noexcept;
 
-        // Seconds since initialize() was called.
-        static double time_since_start() noexcept;
+        // Time since last frame in seconds.
+        static float delta_seconds() noexcept { return s_deltaSeconds; }
 
-        // Seconds between update() calls.
-        static double delta_seconds() noexcept;
+        // Total time since engine start in seconds.
+        static float total_seconds() noexcept { return s_totalSeconds; }
 
-        // Milliseconds since initialize().
-        static std::uint64_t milliseconds_since_start() noexcept;
+        // Engine-wide frame counter.
+        static std::uint64_t frame_count() noexcept { return s_frameCount; }
 
     private:
-        static double s_start_time;
-        static double s_last_frame_time;
-        static double s_delta;
+        static double        s_lastTimestamp;
+        static float         s_deltaSeconds;
+        static float         s_totalSeconds;
+        static std::uint64_t s_frameCount;
     };
 
 } // namespace wave::engine::core::time
